@@ -1,0 +1,106 @@
+import random
+from starPi import simulate
+
+def evolutionary_search(
+    generations=20,
+    population_size=10,
+    Kp_range=(1e-5, 5e-3),
+    Ki_range=(0.0, 1e-3),
+    Kd_range=(0.0, 5e-3),
+):
+
+    def random_individual():
+        return (
+            random.uniform(*Kp_range),
+            random.uniform(*Ki_range),
+            random.uniform(*Kd_range),
+        )
+
+    # popolazione iniziale
+    population = [random_individual() for _ in range(population_size)]
+
+    best_overall = None
+    best_cost_overall = float("inf")
+
+    for gen in range(generations):
+        scored = []
+        print(f"\n=== Generation {gen} ===")
+        for ind in population:
+            Kp, Ki, Kd = ind
+            cost, apogee, effort = simulate(Kp, Ki, Kd, make_plots=False)
+            scored.append((cost, ind, apogee, effort))
+
+        scored.sort(key=lambda x: x[0])  # ordina per costo
+
+        best_cost, best_ind, best_apogee, best_effort = scored[0]
+        print(f"Best in gen {gen}: cost={best_cost:.1f}, apogee={best_apogee:.1f}, effort={best_effort:.3f}, Kp={best_ind[0]:.6g}, Ki={best_ind[1]:.6g}, Kd={best_ind[2]:.6g}")
+
+        if best_cost < best_cost_overall:
+            best_cost_overall = best_cost
+            best_overall = best_ind
+
+        # seleziona top 3 come "genitori"
+        parents = [ind for _, ind, _, _ in scored[:3]]
+
+        # genera nuova popolazione con mutazioni
+        new_population = []
+        while len(new_population) < population_size:
+            parent = random.choice(parents)
+            Kp, Ki, Kd = parent
+
+            # mutazioni gaussiane
+            def mutate(val, scale):
+                return max(val + random.gauss(0, scale), 0.0)
+
+            new_Kp = mutate(Kp, (Kp_range[1] - Kp_range[0]) * 0.1)
+            new_Ki = mutate(Ki, (Ki_range[1] - Ki_range[0]) * 0.1)
+            new_Kd = mutate(Kd, (Kd_range[1] - Kd_range[0]) * 0.1)
+
+            new_population.append((new_Kp, new_Ki, new_Kd))
+
+        population = new_population
+
+    print("\n=== Best overall individual ===")
+    Kp, Ki, Kd = best_overall
+    print(f"Kp={Kp:.6g}, Ki={Ki:.6g}, Kd={Kd:.6g}, best_cost={best_cost_overall:.1f}")
+    # simulazione finale con plot
+    simulate(Kp, Ki, Kd, make_plots=True)
+    return Kp, Ki, Kd
+
+if __name__ == "__main__":
+    kp, ki, kd = evolutionary_search(
+        generations=25,
+        population_size=15,
+        Kp_range=(1e-5, 5e-3),
+        Ki_range=(0.0, 1e-3),
+        Kd_range=(0.0, 5e-3),
+    )
+
+    costs = []
+    apogees = []
+    efforts = []
+    # test to understand the range of error due to noise
+    print("\n=== Testing best individual over 100 runs ===")
+    for i in range(100):
+        cost, apogee, effort = simulate(kp, ki, kd, make_plots=False)
+        costs.append(cost)
+        apogees.append(apogee)
+        efforts.append(effort)
+        print(f"Run {i}: cost={cost:.1f}, apogee={apogee:.1f}, effort={effort:.3f}")
+
+    # calculate mean and stddev of cost, apogee error, and effort
+    def mean_stddev(data):
+        mean = sum(data) / len(data)
+        variance = sum((x - mean) ** 2 for x in data) / len(data)
+        stddev = variance ** 0.5
+        return mean, stddev
+    
+    cost_mean, cost_stddev = mean_stddev(costs)
+    apogee_mean, apogee_stddev = mean_stddev(apogees)
+    effort_mean, effort_stddev = mean_stddev(efforts)
+
+    print(f"\n=== Statistics over 100 runs ===")
+    print(f"Cost: mean={cost_mean:.1f}, stddev={cost_stddev:.1f}")
+    print(f"Apogee: mean={apogee_mean:.1f}, stddev={apogee_stddev:.1f}")
+    print(f"Effort: mean={effort_mean:.3f}, stddev={effort_stddev:.3f}")
+    print("Done.")
