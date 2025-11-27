@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Script base RocketPy con airbrakes controllati da una funzione custom.
 
